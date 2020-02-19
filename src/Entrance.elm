@@ -8,6 +8,7 @@ import Element.Font as Font
 import Element.Input as Input
 import Http
 import Json.Encode as Encode exposing (Value)
+import Layout
 import Util
 import Viewer exposing (Viewer)
 
@@ -102,8 +103,8 @@ viewForm model =
                 , width (px 420)
                 , htmlAttribute (Util.onEnterHandler Enter NoOp)
                 ]
-                [ viewHeader "WTF Chat"
-                , viewEmailField model.email
+                [ Layout.viewHeader "WTF Chat"
+                , Layout.viewEmailField model.email ChangeEmail
                 , viewPasswordField model.password model.showPassword
                 , viewEnterBtn
                 ]
@@ -133,37 +134,6 @@ popOutEffect body =
             body
 
 
-viewHeader : String -> Element msg
-viewHeader header =
-    el
-        [ Font.size 32
-        , Font.bold
-        , centerX
-        ]
-        (text header)
-
-
-viewEmailField : String -> Element Msg
-viewEmailField email =
-    Input.email
-        [ height (px 48)
-        , width fill
-        , Border.width 0
-        , Border.rounded 24
-        , Background.color (rgb 1 1 1)
-        ]
-        { onChange = ChangeEmail
-        , text = email
-        , placeholder = Just (Input.placeholder [] (text "my.email@example.com"))
-        , label =
-            Input.labelAbove
-                [ centerY
-                , Font.semiBold
-                ]
-                (text "email")
-        }
-
-
 viewPasswordField : String -> Bool -> Element Msg
 viewPasswordField password show =
     Input.currentPassword
@@ -179,14 +149,9 @@ viewPasswordField password show =
             Just
                 (Input.placeholder
                     []
-                    (text "something secure")
+                    (text "password")
                 )
-        , label =
-            Input.labelAbove
-                [ centerY
-                , Font.semiBold
-                ]
-                (text "password")
+        , label = Input.labelHidden "password"
         , show = show
         }
 
@@ -221,21 +186,30 @@ viewShowPassword show =
 
 viewEnterBtn : Element Msg
 viewEnterBtn =
-    Input.button
-        [ width (px 160)
-        , height (px 48)
-        , centerX
-        , Border.rounded 24
-        , Background.gradient { angle = -2.5, steps = [ rgb255 150 20 200, rgb255 75 25 225 ] }
-        ]
-        { onPress = Just Enter
-        , label =
-            el
-                [ centerX
-                , centerY
-                , Font.color (rgb 1 1 1)
-                , Font.bold
-                , Font.size 24
-                ]
-                (text "Enter")
-        }
+    el [ centerX ] <|
+        Layout.viewPrimaryBtn
+            { text = "Enter"
+            , msg = Enter
+            , size = ( 160, 48 )
+            }
+
+
+
+--Input.button
+--    [ width (px 160)
+--    , height (px 48)
+--    , centerX
+--    , Border.rounded 24
+--    , Background.gradient { angle = -2.5, steps = [ rgb255 150 20 200, rgb255 75 25 225 ] }
+--    ]
+--    { onPress = Just Enter
+--    , label =
+--        el
+--            [ centerX
+--            , centerY
+--            , Font.color (rgb 1 1 1)
+--            , Font.bold
+--            , Font.size 24
+--            ]
+--            (text "Enter")
+--    }

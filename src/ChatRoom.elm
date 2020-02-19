@@ -11,9 +11,11 @@ import Element.Input as Input
 import Html.Attributes as Attr
 import Http
 import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
+import Layout
 import Message exposing (Message)
 import User exposing (User)
-import Util
+import Util exposing (pass)
 import Viewer exposing (Viewer)
 
 
@@ -21,10 +23,15 @@ import Viewer exposing (Viewer)
 -- MODEL
 
 
+type DialogBox
+    = NewContact String
+
+
 type alias Model =
     { viewer : Viewer
     , contacts : List User
     , chats : Chats
+    , dialogBox : Maybe DialogBox
     }
 
 
@@ -33,6 +40,7 @@ init viewer =
     ( { viewer = viewer
       , contacts = []
       , chats = Chat.fromList []
+      , dialogBox = Nothing
       }
     , getChats <| Viewer.cred viewer
     )
@@ -44,21 +52,28 @@ init viewer =
 
 type Msg
     = NoOp
-    | SendMessage
     | Exit
+    | SendMessage
+    | AddChat
     | SelectChat Chat
     | ChangText String
+    | ChangeEmail String
+    | ToggleDialogBox (Maybe DialogBox)
     | GotChats (Result Http.Error (List Chat))
     | GotMessageResponse (Result Http.Error ( String, Message, Message ))
     | GotNewMessage (Result Decode.Error ( String, Message ))
     | GotExitResponse (Result Http.Error Bool)
+    | GotNewChat (Result Http.Error Chat)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NoOp ->
-            ( model, Cmd.none )
+            pass model
+
+        Exit ->
+            ( model, Api.exit (Viewer.cred model.viewer) GotExitResponse )
 
         SendMessage ->
             let
@@ -74,60 +89,78 @@ update msg model =
                     sendMessage (Viewer.cred model.viewer) message chat_id
             )
 
-        Exit ->
-            ( model, Api.exit (Viewer.cred model.viewer) GotExitResponse )
+        AddChat ->
+            case model.dialogBox of
+                Nothing ->
+                    pass model
+
+                Just (NewContact email) ->
+                    ( model, newChat (Viewer.cred model.viewer) email )
 
         SelectChat chat ->
-            ( { model | chats = Chat.select model.chats chat }, Cmd.none )
+            pass { model | chats = Chat.select model.chats chat }
 
         ChangText text ->
-            ( { model | chats = Chat.updateText model.chats text }, Cmd.none )
+            pass { model | chats = Chat.updateText model.chats text }
+
+        ToggleDialogBox maybeDialogBox ->
+            pass { model | dialogBox = maybeDialogBox }
+
+        ChangeEmail email ->
+            case model.dialogBox of
+                Nothing ->
+                    pass model
+
+                Just (NewContact _) ->
+                    pass { model | dialogBox = Just (NewContact email) }
 
         GotChats response ->
-            ( case response of
-                Ok chats ->
-                    { model | chats = Chat.fromList chats }
+            pass <|
+                case response of
+                    Ok chats ->
+                        { model | chats = Chat.fromList chats }
 
-                Err _ ->
-                    model
-            , Cmd.none
-            )
+                    Err _ ->
+                        model
 
         GotMessageResponse response ->
-            ( case response of
-                Ok ( chat_id, oldMsg, newMsg ) ->
-                    { model
-                        | chats =
-                            Chat.confirmMessage
-                                { chats = model.chats, oldMsg = oldMsg, newMsg = newMsg, chat_id = chat_id }
-                    }
+            pass <|
+                case response of
+                    Ok ( chat_id, oldMsg, newMsg ) ->
+                        { model
+                            | chats =
+                                Chat.confirmMessage
+                                    { chats = model.chats, oldMsg = oldMsg, newMsg = newMsg, chat_id = chat_id }
+                        }
 
-                Err _ ->
-                    model
-            , Cmd.none
-            )
+                    Err _ ->
+                        model
 
         GotNewMessage response ->
             case response of
                 Ok ( chat_id, message ) ->
-                    ( { model
-                        | chats = Chat.addMessage { chats = model.chats, chat_id = chat_id, msg = message }
-                      }
-                    , Cmd.none
-                    )
+                    pass
+                        { model
+                            | chats = Chat.addMessage { chats = model.chats, chat_id = chat_id, msg = message }
+                        }
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    pass model
 
         GotExitResponse response ->
-            ( model
-            , case response of
+            case response of
                 Ok _ ->
-                    Api.emptyCache
+                    ( model, Api.emptyCache )
 
                 Err _ ->
-                    Cmd.none
-            )
+                    pass model
+
+        GotNewChat response ->
+            let
+                _ =
+                    Debug.log "GotNewChat" response
+            in
+            pass model
 
 
 
@@ -164,22 +197,100 @@ sendMessage cred msg chat_id =
         }
 
 
+newChat : Cred -> String -> Cmd Msg
+newChat cred email =
+    Api.post
+        { cred = cred
+        , endpoint = "new-chat"
+        , value = Encode.object [ ( "recipient", Encode.string email ) ]
+        , toMsg = GotNewChat
+        , decoder = Api.mainDecoder Chat.decoder
+        }
+
+
 
 -- VIEW
 
 
 view : Model -> { title : String, content : Element Msg }
 view model =
+    let
+        attr =
+            case model.dialogBox of
+                Nothing ->
+                    []
+
+                Just (NewContact email) ->
+                    [ inFront <|
+                        el [ width fill, height fill, Background.color (rgba 1 1 1 0.5) ] <|
+                            viewAddContactBox email
+                    ]
+    in
     { title = "Chat"
     , content =
         row
-            [ width fill
-            , height fill
-            ]
+            ([ width fill
+             , height fill
+             ]
+                ++ attr
+            )
             [ viewSideMenu model
             , viewChatBody model.chats (Viewer.user model.viewer)
             ]
     }
+
+
+viewAddContactBox : String -> Element Msg
+viewAddContactBox email =
+    column
+        [ width shrink
+        , height shrink
+        , centerX
+        , centerY
+        , padding 32
+        , spacing 16
+        , Background.color (rgb255 236 240 243)
+        , Border.rounded 16
+        , htmlAttribute (Util.onEnterHandler AddChat NoOp)
+        , Border.shadow
+            { offset = ( 2, 2 )
+            , size = 2
+            , blur = 2
+            , color = rgba 0 0 0 0.1
+            }
+        ]
+        [ el
+            [ width fill
+            , inFront <| viewCloseDialogBox
+            ]
+          <|
+            Layout.viewHeader "Enter Email"
+        , Layout.viewEmailField email ChangeEmail
+        , viewAddBtn
+        ]
+
+
+viewCloseDialogBox : Element Msg
+viewCloseDialogBox =
+    image
+        [ alignRight
+        , alignTop
+        , pointer
+        , Events.onMouseUp (ToggleDialogBox Nothing)
+        ]
+        { src = "/assets/close-24px.svg"
+        , description = "X"
+        }
+
+
+viewAddBtn : Element Msg
+viewAddBtn =
+    el [ centerX ] <|
+        Layout.viewPrimaryBtn
+            { text = "Add"
+            , msg = AddChat
+            , size = ( 100, 48 )
+            }
 
 
 viewSideMenu : Model -> Element Msg
@@ -205,18 +316,37 @@ viewSideToolBar =
         , padding 12
         , spacing 12
         , Background.color (rgba 1 1 1 0.1)
+        ]
+        [ viewExitBtn
+        , el [ centerX, centerY ] <| text "WTF Chat"
+        , viewAddChatBtn
+        ]
+
+
+viewExitBtn : Element Msg
+viewExitBtn =
+    image
+        [ alignLeft
+        , centerY
+        , pointer
         , Events.onMouseUp Exit
         ]
-        [ image
-            [ alignLeft
-            , centerY
-            , pointer
-            ]
-            { src = "/assets/exit_from_app-24px.svg"
-            , description = "exit"
-            }
-        , el [ centerX, centerY ] <| text "Side Bar..."
+        { src = "/assets/exit_from_app-24px.svg"
+        , description = "exit"
+        }
+
+
+viewAddChatBtn : Element Msg
+viewAddChatBtn =
+    image
+        [ alignRight
+        , centerY
+        , pointer
+        , Events.onMouseUp (ToggleDialogBox <| Just <| NewContact "")
         ]
+        { src = "/assets/add_comment-24px.svg"
+        , description = "+"
+        }
 
 
 viewChats : Chats -> Element Msg

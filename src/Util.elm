@@ -35,3 +35,12 @@ onEnterHandler send noOp =
                     Decode.fail "Not Enter Key"
             )
         |> preventDefaultOn "keydown"
+
+
+
+-- EXPORT
+
+
+pass : model -> ( model, Cmd msg )
+pass model =
+    ( model, Cmd.none )
