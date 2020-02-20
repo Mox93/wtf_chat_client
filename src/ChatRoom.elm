@@ -160,7 +160,16 @@ update msg model =
                 _ =
                     Debug.log "GotNewChat" response
             in
-            pass model
+            case response of
+                Ok chat ->
+                    pass
+                        { model
+                            | chats = Chat.addChat model.chats chat
+                            , dialogBox = Nothing
+                        }
+
+                Err _ ->
+                    pass model
 
 
 
@@ -327,8 +336,11 @@ viewExitBtn : Element Msg
 viewExitBtn =
     image
         [ alignLeft
+        , paddingXY 12 12
+        , Border.rounded 24
         , centerY
         , pointer
+        , mouseOver [ Background.color (rgba 0 0 0 0.1) ]
         , Events.onMouseUp Exit
         ]
         { src = "/assets/exit_from_app-24px.svg"
@@ -340,8 +352,11 @@ viewAddChatBtn : Element Msg
 viewAddChatBtn =
     image
         [ alignRight
+        , paddingXY 12 12
+        , Border.rounded 24
         , centerY
         , pointer
+        , mouseOver [ Background.color (rgba 0 0 0 0.1) ]
         , Events.onMouseUp (ToggleDialogBox <| Just <| NewContact "")
         ]
         { src = "/assets/add_comment-24px.svg"
@@ -353,7 +368,7 @@ viewChats : Chats -> Element Msg
 viewChats chats =
     [ viewDivider ]
         ++ (Chat.toList chats
-                |> List.map (\chat -> viewChatTab chat (Chat.selected chats == Just chat))
+                |> List.map (\chat -> viewChatCard chat (Chat.selected chats == Just chat))
                 |> List.intersperse viewDivider
            )
         ++ [ viewDivider ]
@@ -370,8 +385,8 @@ viewDivider =
         Element.none
 
 
-viewChatTab : Chat -> Bool -> Element Msg
-viewChatTab chat open =
+viewChatCard : Chat -> Bool -> Element Msg
+viewChatCard chat open =
     row
         [ width fill
         , height (px 72)
@@ -462,7 +477,7 @@ viewChatBody chats sender =
                     , height fill
                     ]
                     [ viewChatToolBar chat
-                    , viewMessages (Chat.messages chat) sender
+                    , Chat.view (Chat.messages chat) sender
                     , viewTextInput <| Chat.pendingMsg chat
                     ]
 
@@ -480,18 +495,6 @@ viewChatToolBar chat =
         [ viewAvatar True
         , text <| Chat.title chat
         ]
-
-
-viewMessages : List Message -> User -> Element msg
-viewMessages msgList user =
-    column
-        [ width fill
-        , height fill
-        , padding 24
-        , spacing 12
-        ]
-    <|
-        List.map (\msg -> Message.view msg user) msgList
 
 
 viewTextInput : String -> Element Msg

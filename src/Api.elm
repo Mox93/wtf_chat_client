@@ -1,5 +1,6 @@
 port module Api exposing
     ( Cred
+    , delete
     , document
     , emptyCache
     , enter
@@ -125,22 +126,24 @@ credToViewerDecoder toViewer cred =
 
 url_root =
     --"http://localhost:5000/api/"
-    --"http://192.168.0.113:5000/api/"
-    "http://192.168.0.108:5000/api/"
+    --"http://192.168.0.108:5000/api/"
+    "http://192.168.0.113:5000/api/"
 
 
 enter :
-    (Result Http.Error (Maybe viewer) -> msg)
-    -> Decoder (User -> Cred -> viewer)
-    -> Value
+    { r
+        | toMsg : Result Http.Error (Maybe viewer) -> msg
+        , toViewer : Decoder (User -> Cred -> viewer)
+        , value : Value
+    }
     -> Cmd msg
-enter toMsg toViewer value =
+enter request =
     Http.post
         { url = url_root ++ "enter"
-        , body = Http.jsonBody value
+        , body = Http.jsonBody request.value
         , expect =
-            Http.expectJson toMsg <|
-                Decode.andThen (credToViewerDecoder toViewer) (mainDecoder credDecoder)
+            Http.expectJson request.toMsg <|
+                Decode.andThen (credToViewerDecoder request.toViewer) (mainDecoder credDecoder)
         }
 
 
@@ -199,6 +202,37 @@ get request =
                     [ Http.header "Authorization" <| "Bearer " ++ token ]
         , url = url_root ++ request.endpoint
         , body = Http.emptyBody
+        , expect = Http.expectJson request.toMsg request.decoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+delete :
+    { r
+        | cred : Cred
+        , endpoint : String
+        , value : Value
+        , toMsg : Result Http.Error value -> msg
+        , decoder : Decoder value
+    }
+    -> Cmd msg
+delete request =
+    let
+        (Cred _ (AccessToken maybeToken _)) =
+            request.cred
+    in
+    Http.request
+        { method = "DELETE"
+        , headers =
+            case maybeToken of
+                Nothing ->
+                    []
+
+                Just token ->
+                    [ Http.header "Authorization" <| "Bearer " ++ token ]
+        , url = url_root ++ request.endpoint
+        , body = Http.jsonBody request.value
         , expect = Http.expectJson request.toMsg request.decoder
         , timeout = Nothing
         , tracker = Nothing
@@ -292,10 +326,27 @@ newMessage toMsg =
 -- DOCUMENT
 
 
+flagDecoder : Decoder (User -> Cred -> viewer) -> Decoder { url : String, maybeViewer : Maybe viewer }
+flagDecoder viewerDecoder =
+    Decode.map2
+        (\url storage ->
+            let
+                maybeViewer =
+                    Decode.decodeString (storageDecoder viewerDecoder) storage
+                        |> Result.toMaybe
+            in
+            { url = url
+            , maybeViewer = maybeViewer
+            }
+        )
+        (Decode.field "url" Decode.string)
+        (Decode.field "viewer" Decode.string)
+
+
 document :
     Decoder (User -> Cred -> viewer)
     ->
-        { init : Maybe viewer -> ( model, Cmd msg )
+        { init : String -> Maybe viewer -> ( model, Cmd msg )
         , subscriptions : model -> Sub msg
         , update : msg -> model -> ( model, Cmd msg )
         , view : model -> Browser.Document msg
@@ -305,12 +356,11 @@ document viewerDecoder config =
     let
         init_ flags =
             let
-                maybeViewer =
-                    Decode.decodeValue Decode.string flags
-                        |> Result.andThen (Decode.decodeString (storageDecoder viewerDecoder))
-                        |> Result.toMaybe
+                { url, maybeViewer } =
+                    Decode.decodeValue (flagDecoder viewerDecoder) flags
+                        |> Result.withDefault { url = "", maybeViewer = Nothing }
             in
-            config.init maybeViewer
+            config.init url maybeViewer
     in
     Browser.document
         { init = init_

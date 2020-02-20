@@ -26,24 +26,37 @@ main =
 -- MODEL
 
 
-type Model
+type State
     = Guest Entrance.Model
     | User ChatRoom.Model
 
 
-init : Maybe Viewer -> ( Model, Cmd Msg )
-init maybeViewer =
+type alias Model =
+    { state : State
+    , url : String
+    }
+
+
+init : String -> Maybe Viewer -> ( Model, Cmd Msg )
+init url maybeViewer =
+    let
+        _ =
+            Debug.log "maybeViewer" maybeViewer
+    in
     case maybeViewer of
         Just viewer ->
             let
                 ( model, cmd ) =
                     ChatRoom.init viewer
             in
-            ( User model, Cmd.map GotChatRoomMsg cmd )
+            ( { url = url, state = User model }, Cmd.map GotChatRoomMsg cmd )
 
         Nothing ->
-            ( Guest
-                { email = "", password = "", rememberMe = False, showPassword = False }
+            ( { url = ""
+              , state =
+                    Guest
+                        { email = "", password = "", rememberMe = False, showPassword = False }
+              }
             , Cmd.none
             )
 
@@ -62,25 +75,25 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotEntranceMsg subMsg ->
-            case model of
+            case model.state of
                 Guest entrance ->
                     let
                         ( subModel, subCmd ) =
                             Entrance.update subMsg entrance
                     in
-                    ( Guest subModel, Cmd.map GotEntranceMsg subCmd )
+                    ( { model | state = Guest subModel }, Cmd.map GotEntranceMsg subCmd )
 
                 _ ->
                     ( model, Cmd.none )
 
         GotChatRoomMsg subMsg ->
-            case model of
+            case model.state of
                 User chatRoom ->
                     let
                         ( subModel, subCmd ) =
                             ChatRoom.update subMsg chatRoom
                     in
-                    ( User subModel
+                    ( { model | state = User subModel }
                     , Cmd.map GotChatRoomMsg subCmd
                     )
 
@@ -88,15 +101,15 @@ update msg model =
                     ( model, Cmd.none )
 
         GotViewer maybeViewer ->
-            case ( maybeViewer, model ) of
+            case ( maybeViewer, model.state ) of
                 ( Nothing, Guest _ ) ->
                     ( model, Cmd.none )
 
                 ( Just viewer, User chatRoom ) ->
-                    ( User { chatRoom | viewer = viewer }, Cmd.none )
+                    ( { model | state = User { chatRoom | viewer = viewer } }, Cmd.none )
 
                 ( _, _ ) ->
-                    init maybeViewer
+                    init model.url maybeViewer
 
 
 
@@ -107,7 +120,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Api.viewerChanges (\maybeViewer -> GotViewer maybeViewer) Viewer.decoder
-        , case model of
+        , case model.state of
             Guest _ ->
                 Sub.none
 
@@ -133,7 +146,7 @@ view model =
                 ]
             }
     in
-    case model of
+    case model.state of
         Guest entrance ->
             viewPage (Entrance.view entrance) GotEntranceMsg
 

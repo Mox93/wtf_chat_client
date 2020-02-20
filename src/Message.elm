@@ -1,10 +1,12 @@
 module Message exposing
     ( Message
+    , body
     , decoder
     , encode
     , fromString
     , replace
     , sender
+    , timeStamp
     , view
     , withIdDecoder
     , withOriginalDecoder
@@ -14,7 +16,6 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
-import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Time
@@ -76,6 +77,16 @@ sender message =
 
         Pending msg ->
             msg.sender
+
+
+timeStamp : Message -> Time.Posix
+timeStamp message =
+    case message of
+        Confirmed msg ->
+            msg.timeStamp
+
+        Pending msg ->
+            msg.timeStamp
 
 
 
@@ -151,43 +162,80 @@ replace chat oldMsg newMsg =
 
 view : Message -> User -> Element msg
 view msg from =
-    el
-        [ width (maximum 640 shrink)
-        , height shrink
-        , alignBottom
-        , padding 12
-        , Background.color (rgb255 209 220 231)
-        , Border.rounded 8
-        , Border.color (rgb255 231 101 58)
-        , Font.size 16
-        , if from == sender msg then
-            alignRight
+    let
+        fromWho =
+            if from == sender msg then
+                [ alignRight
+                , Background.color (rgb255 250 250 250)
+                ]
 
-          else
-            alignLeft
-        , case msg of
-            Pending _ ->
-                Border.width 2
-
-            Confirmed _ ->
-                Border.width 0
-        ]
-    <|
-        viewText (body msg)
-
-
-viewText : String -> Element msg
-viewText msg =
+            else
+                [ alignLeft
+                , Background.color (rgb255 209 220 231)
+                ]
+    in
     column
-        [ spacing 4 ]
+        ([ width (maximum 640 shrink)
+         , height shrink
+         , alignBottom
+         , padding 12
+         , spacing 8
+         , Border.rounded 8
+         ]
+            ++ fromWho
+        )
+    <|
+        [ viewMsgBody (body msg)
+        , viewStatus msg from
+        ]
+
+
+viewMsgBody : String -> Element msg
+viewMsgBody msg =
+    column
+        [ spacing 4
+        , Font.size 16
+        ]
         (String.split "\n" msg
             |> List.map
                 (\m ->
                     paragraph
                         [ width fill
                         , spacing 4
-                        , htmlAttribute (Attr.style "overflow-wrap" "break-word")
                         ]
                         [ text m ]
                 )
         )
+
+
+viewStatus : Message -> User -> Element msg
+viewStatus msg from =
+    let
+        time =
+            String.fromInt <| Time.posixToMillis <| timeStamp msg
+
+        status =
+            if sender msg == from then
+                case msg of
+                    Pending _ ->
+                        Background.color (rgb255 231 101 58)
+
+                    Confirmed _ ->
+                        Background.color (rgb255 122 231 78)
+
+            else
+                Background.color (rgb255 110 150 231)
+    in
+    row
+        [ Font.size 12
+        , spacing 8
+        ]
+        [ text time
+        , el
+            [ width (px 8)
+            , height (px 8)
+            , Border.rounded 4
+            , status
+            ]
+            Element.none
+        ]

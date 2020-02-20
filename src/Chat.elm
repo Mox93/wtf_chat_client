@@ -1,6 +1,7 @@
 module Chat exposing
     ( Chat
     , Chats
+    , addChat
     , addMessage
     , chatsDecoder
     , confirmMessage
@@ -17,9 +18,11 @@ module Chat exposing
     , title
     , toList
     , updateText
+    , view
     )
 
 import Api exposing (Cred)
+import Element exposing (..)
 import Json.Decode as Decode exposing (Decoder)
 import Message exposing (Message)
 import User exposing (User)
@@ -254,6 +257,15 @@ addMessage config =
             Active (List.map updateChatMsg val1) (updateChatMsg val2) (List.map updateChatMsg val3)
 
 
+addChat : Chats -> Chat -> Chats
+addChat chats newChat =
+    if List.member newChat (toList chats) then
+        select chats newChat
+
+    else
+        Active [] newChat <| toList chats
+
+
 
 --INTERNAL
 
@@ -342,3 +354,19 @@ decoder =
 chatsDecoder : Decoder (List Chat)
 chatsDecoder =
     Api.mainDecoder <| Decode.field "chats" <| Decode.list decoder
+
+
+
+-- VIEW
+
+
+view : List Message -> User -> Element msg
+view msgList user =
+    column
+        [ width fill
+        , height fill
+        , paddingXY 72 24
+        , spacing 12
+        ]
+    <|
+        List.map (\msg -> Message.view msg user) msgList

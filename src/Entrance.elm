@@ -46,7 +46,7 @@ update msg model =
             ( model, Cmd.none )
 
         Enter ->
-            ( model, Api.enter GotResponse Viewer.decoder <| encode model )
+            ( model, Api.enter { toMsg = GotResponse, toViewer = Viewer.decoder, value = encode model } )
 
         ChangeEmail email ->
             ( { model | email = email }, Cmd.none )
