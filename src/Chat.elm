@@ -8,11 +8,14 @@ module Chat exposing
     , decoder
     , emails
     , fromList
+    , hasNewMessages
     , id
     , messages
-    , moveToBody
+    , moveToTop
     , name
     , pendingMsg
+    , pushMessage
+    , remove
     , select
     , selected
     , title
@@ -133,6 +136,20 @@ selected chats =
             Nothing
 
 
+hasNewMessages : Chat -> Bool
+hasNewMessages chat =
+    let
+        msgList =
+            List.filter (\msg -> not (Message.scene msg)) (messages chat)
+    in
+    case msgList of
+        [] ->
+            False
+
+        _ ->
+            True
+
+
 
 -- CONVENTION
 
@@ -165,18 +182,18 @@ select chats chat =
                     Idle chatList
 
                 Just ( val1, val2, val3 ) ->
-                    Active val1 val2 val3
+                    Active val1 (markAsScene val2) val3
 
         Active val1 val2 val3 ->
             case ( split val1 chat, split val3 chat ) of
                 ( Just ( valA, valB, valC ), Nothing ) ->
-                    Active valA valB (valC ++ [ val2 ] ++ val3)
+                    Active valA (markAsScene valB) (valC ++ [ val2 ] ++ val3)
 
                 ( Nothing, Just ( valA, valB, valC ) ) ->
-                    Active (val1 ++ [ val2 ] ++ valA) valB valC
+                    Active (val1 ++ [ val2 ] ++ valA) (markAsScene valB) valC
 
                 ( _, _ ) ->
-                    Active val1 val2 val3
+                    Active val1 (markAsScene val2) val3
 
 
 updateText : Chats -> String -> Chats
@@ -189,8 +206,8 @@ updateText chats text =
             Active val1 (changeText val2 text) val3
 
 
-moveToBody : Chats -> User -> ( Chats, Maybe ( Message, String ) )
-moveToBody chats sender =
+pushMessage : Chats -> User -> ( Chats, Maybe ( Message, String ) )
+pushMessage chats sender =
     case chats of
         Idle _ ->
             ( chats, Nothing )
@@ -211,11 +228,11 @@ moveToBody chats sender =
                 ( Active val1 chat val3, Just ( msg, id chat ) )
 
 
-confirmMessage : { r | chats : Chats, chat_id : String, oldMsg : Message, newMsg : Message } -> Chats
+confirmMessage : { r | chats : Chats, chatId : String, oldMsg : Message, newMsg : Message } -> Chats
 confirmMessage config =
     let
         updateChatMsg chat =
-            if config.chat_id == id chat then
+            if config.chatId == id chat then
                 case chat of
                     PersonalChat pChat ->
                         PersonalChat <| Message.replace pChat config.oldMsg config.newMsg
@@ -234,11 +251,11 @@ confirmMessage config =
             Active (List.map updateChatMsg val1) (updateChatMsg val2) (List.map updateChatMsg val3)
 
 
-addMessage : { r | chats : Chats, chat_id : String, msg : Message } -> Chats
+addMessage : { r | chats : Chats, chatId : String, msg : Message } -> Chats
 addMessage config =
     let
         updateChatMsg chat =
-            if config.chat_id == id chat then
+            if config.chatId == id chat then
                 case chat of
                     PersonalChat pChat ->
                         PersonalChat { pChat | messages = pChat.messages ++ [ config.msg ] }
@@ -264,6 +281,72 @@ addChat chats newChat =
 
     else
         Active [] newChat <| toList chats
+
+
+moveToTop : Chats -> String -> Chats
+moveToTop chats chatId =
+    let
+        _ =
+            Debug.log "Move to top" chatId
+
+        filter chatList =
+            List.filter (\c -> id c /= chatId) chatList
+
+        maybeChat =
+            fromChatId chats chatId
+    in
+    case maybeChat of
+        Just chat ->
+            case chats of
+                Idle chatList ->
+                    Idle ([ chat ] ++ filter chatList)
+
+                Active val1 val2 val3 ->
+                    if chat == val2 then
+                        Active [] val2 (val1 ++ val3)
+
+                    else
+                        let
+                            _ =
+                                Debug.log "Active" "Not selected!!"
+                        in
+                        Active ([ chat ] ++ filter val1) val2 (filter val3)
+
+        Nothing ->
+            chats
+
+
+remove : Chats -> Chat -> Chats
+remove chats chat =
+    let
+        filter chatList =
+            List.filter (\c -> c /= chat) chatList
+    in
+    case chats of
+        Idle chatList ->
+            Idle (filter chatList)
+
+        Active val1 val2 val3 ->
+            if val2 == chat then
+                let
+                    next =
+                        List.head val3
+
+                    previous =
+                        List.reverse val1 |> List.head
+                in
+                case ( next, previous ) of
+                    ( Just nextChat, _ ) ->
+                        Active val1 nextChat (filter val3)
+
+                    ( Nothing, Just previousChat ) ->
+                        Active (filter val1) previousChat val3
+
+                    ( _, _ ) ->
+                        Idle (val1 ++ val3)
+
+            else
+                Active (filter val1) val2 (filter val3)
 
 
 
@@ -326,6 +409,23 @@ relocateMsg chat sender =
 
         GroupChat body ->
             ( GroupChat (forward body), msg )
+
+
+fromChatId : Chats -> String -> Maybe Chat
+fromChatId chats chatId =
+    toList chats
+        |> List.filter (\chat -> chatId == id chat)
+        |> List.head
+
+
+markAsScene : Chat -> Chat
+markAsScene chat =
+    case chat of
+        GroupChat body ->
+            GroupChat { body | messages = List.map Message.confirmScene body.messages }
+
+        PersonalChat body ->
+            PersonalChat { body | messages = List.map Message.confirmScene body.messages }
 
 
 

@@ -78,7 +78,7 @@ update msg model =
         SendMessage ->
             let
                 ( chats, maybePair ) =
-                    Chat.moveToBody model.chats (Viewer.user model.viewer)
+                    Chat.pushMessage model.chats (Viewer.user model.viewer)
             in
             ( { model | chats = chats }
             , case maybePair of
@@ -124,24 +124,27 @@ update msg model =
                         model
 
         GotMessageResponse response ->
-            pass <|
-                case response of
-                    Ok ( chat_id, oldMsg, newMsg ) ->
+            case response of
+                Ok ( chatId, oldMsg, newMsg ) ->
+                    pass
                         { model
                             | chats =
                                 Chat.confirmMessage
-                                    { chats = model.chats, oldMsg = oldMsg, newMsg = newMsg, chat_id = chat_id }
+                                    { chats = model.chats, oldMsg = oldMsg, newMsg = newMsg, chatId = chatId }
                         }
 
-                    Err _ ->
-                        model
+                Err _ ->
+                    pass model
 
         GotNewMessage response ->
             case response of
-                Ok ( chat_id, message ) ->
+                Ok ( chatId, message ) ->
                     pass
                         { model
-                            | chats = Chat.addMessage { chats = model.chats, chat_id = chat_id, msg = message }
+                            | chats =
+                                Chat.moveToTop
+                                    (Chat.addMessage { chats = model.chats, chatId = chatId, msg = message })
+                                    chatId
                         }
 
                 Err _ ->
@@ -196,11 +199,11 @@ getChats cred =
 
 
 sendMessage : Cred -> Message -> String -> Cmd Msg
-sendMessage cred msg chat_id =
+sendMessage cred msg chatId =
     Api.post
         { cred = cred
         , endpoint = "send-message"
-        , value = Message.encode msg chat_id
+        , value = Message.encode msg chatId
         , toMsg = GotMessageResponse
         , decoder = Api.mainDecoder (Message.withOriginalDecoder msg)
         }
@@ -393,7 +396,7 @@ viewChatCard chat open =
         , padding 12
         , spacing 12
         , pointer
-        , Events.onMouseDown (SelectChat chat)
+        , Events.onMouseUp (SelectChat chat)
         , mouseOver
             [ Background.color <|
                 if open then
@@ -418,7 +421,31 @@ viewChatCard chat open =
                 |> text
                 |> el [ Font.size 12 ]
             ]
+        , viewStatus (Chat.hasNewMessages chat)
         ]
+
+
+viewStatus : Bool -> Element msg
+viewStatus newMsg =
+    el
+        ([ width (px 12)
+         , height (px 12)
+         , alignRight
+         , alignTop
+         , Border.rounded 6
+         ]
+            ++ (if newMsg then
+                    [ Border.innerGlow (rgb255 255 75 72) 2
+                    , Background.color (rgb255 255 106 91)
+                    ]
+
+                else
+                    [ Border.innerGlow (rgb255 174 152 191) 2
+                    , Background.color (rgb255 203 176 222)
+                    ]
+               )
+        )
+        Element.none
 
 
 viewAvatar : Bool -> Element msg
@@ -475,6 +502,7 @@ viewChatBody chats sender =
                 column
                     [ width fill
                     , height fill
+                    , Events.onMouseDown (SelectChat chat)
                     ]
                     [ viewChatToolBar chat
                     , Chat.view (Chat.messages chat) sender

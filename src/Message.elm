@@ -1,10 +1,12 @@
 module Message exposing
     ( Message
     , body
+    , confirmScene
     , decoder
     , encode
     , fromString
     , replace
+    , scene
     , sender
     , timeStamp
     , view
@@ -31,6 +33,7 @@ type alias ConfirmedMsg =
     , sender : User
     , body : String
     , timeStamp : Time.Posix
+    , scene : Bool
     }
 
 
@@ -42,8 +45,8 @@ type alias PendingMsg =
 
 
 type Message
-    = Confirmed ConfirmedMsg
-    | Pending PendingMsg
+    = Incoming ConfirmedMsg
+    | Outgoing PendingMsg
 
 
 
@@ -52,7 +55,7 @@ type Message
 
 fromString : String -> User -> Message
 fromString msg user =
-    Pending { sender = user, body = msg, timeStamp = Time.millisToPosix 0 }
+    Outgoing { sender = user, body = msg, timeStamp = Time.millisToPosix 0 }
 
 
 
@@ -62,31 +65,41 @@ fromString msg user =
 body : Message -> String
 body message =
     case message of
-        Confirmed msg ->
+        Incoming msg ->
             msg.body
 
-        Pending msg ->
+        Outgoing msg ->
             msg.body
 
 
 sender : Message -> User
 sender message =
     case message of
-        Confirmed msg ->
+        Incoming msg ->
             msg.sender
 
-        Pending msg ->
+        Outgoing msg ->
             msg.sender
 
 
 timeStamp : Message -> Time.Posix
 timeStamp message =
     case message of
-        Confirmed msg ->
+        Incoming msg ->
             msg.timeStamp
 
-        Pending msg ->
+        Outgoing msg ->
             msg.timeStamp
+
+
+scene : Message -> Bool
+scene message =
+    case message of
+        Incoming msg ->
+            msg.scene
+
+        Outgoing _ ->
+            True
 
 
 
@@ -94,46 +107,47 @@ timeStamp message =
 
 
 encode : Message -> String -> Value
-encode message chat_id =
+encode message chatId =
     case message of
-        Confirmed msg ->
+        Incoming msg ->
             Encode.object
                 [ ( "_id", Encode.string msg.id )
-                , ( "chat_id", Encode.string chat_id )
+                , ( "chat_id", Encode.string chatId )
                 , ( "body", Encode.string msg.body )
                 , ( "time_stamp", Encode.int <| Time.posixToMillis msg.timeStamp )
                 ]
 
-        Pending msg ->
+        Outgoing msg ->
             Encode.object
                 [ ( "body", Encode.string msg.body )
-                , ( "chat_id", Encode.string chat_id )
+                , ( "chat_id", Encode.string chatId )
                 , ( "time_stamp", Encode.int <| Time.posixToMillis msg.timeStamp )
                 ]
 
 
-decoder : Decoder Message
-decoder =
-    Decode.map Confirmed <|
-        Decode.map4 ConfirmedMsg
+decoder : Bool -> Decoder Message
+decoder wasScene =
+    Decode.map Incoming <|
+        Decode.map5 ConfirmedMsg
             (Decode.field "_id" Decode.string)
             (Decode.field "sender" User.decoder)
             (Decode.field "body" Decode.string)
             (Decode.field "time_stamp" (Decode.map Time.millisToPosix Decode.int))
+            (Decode.succeed wasScene)
 
 
 withOriginalDecoder : Message -> Decoder ( String, Message, Message )
-withOriginalDecoder msg =
-    Decode.map2 (\chat_id m -> ( chat_id, msg, m ))
+withOriginalDecoder oldMsg =
+    Decode.map2 (\chatId newMsg -> ( chatId, oldMsg, newMsg ))
         (Decode.field "chat_id" Decode.string)
-        decoder
+        (decoder True)
 
 
 withIdDecoder : Decoder ( String, Message )
 withIdDecoder =
     Decode.map2 Tuple.pair
         (Decode.field "chat_id" Decode.string)
-        decoder
+        (decoder False)
 
 
 
@@ -154,6 +168,16 @@ replace chat oldMsg newMsg =
                 )
                 chat.messages
     }
+
+
+confirmScene : Message -> Message
+confirmScene message =
+    case message of
+        Incoming msg ->
+            Incoming { msg | scene = True }
+
+        _ ->
+            message
 
 
 
@@ -215,16 +239,16 @@ viewStatus msg from =
             String.fromInt <| Time.posixToMillis <| timeStamp msg
 
         status =
-            if sender msg == from then
-                case msg of
-                    Pending _ ->
-                        Background.color (rgb255 231 101 58)
+            case msg of
+                Outgoing _ ->
+                    Background.color (rgb255 231 101 58)
 
-                    Confirmed _ ->
+                Incoming _ ->
+                    if sender msg == from then
                         Background.color (rgb255 122 231 78)
 
-            else
-                Background.color (rgb255 110 150 231)
+                    else
+                        Background.color (rgb255 110 150 231)
     in
     row
         [ Font.size 12
