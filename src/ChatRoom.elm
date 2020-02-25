@@ -152,11 +152,19 @@ update msg model =
 
         GotExitResponse response ->
             case response of
-                Ok _ ->
+                Ok okMsg ->
+                    let
+                        _ =
+                            Debug.log "Logout Ok" okMsg
+                    in
                     ( model, Api.emptyCache )
 
-                Err _ ->
-                    pass model
+                Err errMsg ->
+                    let
+                        _ =
+                            Debug.log "Logout Error" errMsg
+                    in
+                    ( model, Api.emptyCache )
 
         GotNewChat response ->
             let
@@ -234,7 +242,12 @@ view model =
 
                 Just (NewContact email) ->
                     [ inFront <|
-                        el [ width fill, height fill, Background.color (rgba 1 1 1 0.5) ] <|
+                        el
+                            [ width fill
+                            , height fill
+                            , Background.color (rgba 1 1 1 0.5)
+                            ]
+                        <|
                             viewAddContactBox email
                     ]
     in
@@ -242,7 +255,7 @@ view model =
     , content =
         row
             ([ width fill
-             , height fill
+             , htmlAttribute <| Attr.style "height" "100vh"
              ]
                 ++ attr
             )
@@ -270,13 +283,9 @@ viewAddContactBox email =
             , blur = 2
             , color = rgba 0 0 0 0.1
             }
+        , inFront <| el [ alignTop, alignRight, moveDown 12, moveLeft 12 ] viewCloseDialogBox
         ]
-        [ el
-            [ width fill
-            , inFront <| viewCloseDialogBox
-            ]
-          <|
-            Layout.viewHeader "Enter Email"
+        [ Layout.viewHeader "Enter Email"
         , Layout.viewEmailField email ChangeEmail
         , viewAddBtn
         ]
@@ -285,8 +294,8 @@ viewAddContactBox email =
 viewCloseDialogBox : Element Msg
 viewCloseDialogBox =
     image
-        [ alignRight
-        , alignTop
+        [ centerX
+        , centerY
         , pointer
         , Events.onMouseUp (ToggleDialogBox Nothing)
         ]
@@ -316,7 +325,7 @@ viewSideMenu model =
         , Background.gradient { angle = -2, steps = [ rgb255 150 20 200, rgb255 75 25 225 ] }
         ]
         [ viewSideToolBar
-        , viewChats model.chats
+        , viewChatList model.chats
         ]
 
 
@@ -367,15 +376,20 @@ viewAddChatBtn =
         }
 
 
-viewChats : Chats -> Element Msg
-viewChats chats =
-    [ viewDivider ]
-        ++ (Chat.toList chats
-                |> List.map (\chat -> viewChatCard chat (Chat.selected chats == Just chat))
-                |> List.intersperse viewDivider
-           )
-        ++ [ viewDivider ]
-        |> column [ height fill, width fill ]
+viewChatList : Chats -> Element Msg
+viewChatList chats =
+    column
+        [ height fill
+        , width fill
+        , scrollbarY
+        ]
+        ([ viewDivider ]
+            ++ (Chat.toList chats
+                    |> List.map (\chat -> viewChatCard chat (Chat.selected chats == Just chat))
+                    |> List.intersperse viewDivider
+               )
+            ++ [ viewDivider ]
+        )
 
 
 viewDivider : Element msg
@@ -489,25 +503,22 @@ viewAvatar open =
 
 viewChatBody : Chats -> User -> Element Msg
 viewChatBody chats sender =
-    el
-        [ width fill
-        , height fill
-        ]
-    <|
-        case Chat.selected chats of
-            Nothing ->
-                el [ centerX, centerY ] <| text "Chat Body..."
+    case Chat.selected chats of
+        Nothing ->
+            el [ width fill, height fill ] <|
+                el [ centerX, centerY ] <|
+                    text "Chat Body..."
 
-            Just chat ->
-                column
-                    [ width fill
-                    , height fill
-                    , Events.onMouseDown (SelectChat chat)
-                    ]
-                    [ viewChatToolBar chat
-                    , Chat.view (Chat.messages chat) sender
-                    , viewTextInput <| Chat.pendingMsg chat
-                    ]
+        Just chat ->
+            column
+                [ width fill
+                , height fill
+                , Events.onMouseDown (SelectChat chat)
+                ]
+                [ viewChatToolBar chat
+                , el [ width fill, height fill, scrollbarY ] <| Chat.view (Chat.messages chat) sender
+                , viewTextInput <| Chat.pendingMsg chat
+                ]
 
 
 viewChatToolBar : Chat -> Element msg

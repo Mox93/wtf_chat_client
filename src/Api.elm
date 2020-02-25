@@ -126,8 +126,8 @@ credToViewerDecoder toViewer cred =
 
 url_root =
     --"http://localhost:5000/api/"
-    --"http://192.168.0.108:5000/api/"
-    "http://192.168.0.101:5000/api/"
+    --"http://192.168.0.101:5000/api/"
+    "http://192.168.0.108:5000/api/"
 
 
 enter :
