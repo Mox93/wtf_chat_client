@@ -203,7 +203,7 @@ updateText chats text =
             chats
 
         Active val1 val2 val3 ->
-            Active val1 (changeText val2 text) val3
+            Active val1 (markAsScene <| changeText val2 text) val3
 
 
 pushMessage : Chats -> User -> ( Chats, Maybe ( Message, String ) )

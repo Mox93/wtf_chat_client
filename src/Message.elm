@@ -18,6 +18,7 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
+import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Time
@@ -187,7 +188,7 @@ confirmScene message =
 view : Message -> User -> Element msg
 view msg from =
     let
-        fromWho =
+        senderStyle =
             if from == sender msg then
                 [ alignRight
                 , Background.color (rgb255 250 250 250)
@@ -206,7 +207,7 @@ view msg from =
          , spacing 8
          , Border.rounded 8
          ]
-            ++ fromWho
+            ++ senderStyle
         )
     <|
         [ viewMsgBody (body msg)
@@ -224,7 +225,8 @@ viewMsgBody msg =
             |> List.map
                 (\m ->
                     paragraph
-                        [ width fill
+                        [ htmlAttribute (Attr.style "width" "100%")
+                        , htmlAttribute (Attr.style "word-break" "break-word")
                         , spacing 4
                         ]
                         [ text m ]
@@ -253,6 +255,7 @@ viewStatus msg from =
     row
         [ Font.size 12
         , spacing 8
+        , alignRight
         ]
         [ text time
         , el

@@ -254,7 +254,7 @@ view model =
     { title = "Chat"
     , content =
         row
-            ([ width fill
+            ([ htmlAttribute <| Attr.style "width" "100vw"
              , htmlAttribute <| Attr.style "height" "100vh"
              ]
                 ++ attr
@@ -540,11 +540,12 @@ viewTextInput : String -> Element Msg
 viewTextInput msg =
     row
         [ alignBottom
-        , width fill
         , height (minimum 72 shrink)
         , Background.color (rgba 0 0 0 0.05)
         , padding 12
         , spacing 12
+        , htmlAttribute (Attr.style "width" "100%")
+        , htmlAttribute (Attr.style "word-break" "break-word")
         ]
         [ Input.multiline
             [ Border.rounded 24
@@ -552,7 +553,6 @@ viewTextInput msg =
             , focused []
             , htmlAttribute (Util.onEnterHandler SendMessage NoOp)
             , Font.size 16
-            , htmlAttribute (Attr.style "overflow-wrap" "break-word")
             ]
             { onChange = ChangText
             , text = msg
