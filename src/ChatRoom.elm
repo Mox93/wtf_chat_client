@@ -1,6 +1,7 @@
 module ChatRoom exposing (Model, Msg, init, subscriptions, update, view)
 
 import Api exposing (Cred)
+import Browser.Dom as Dom
 import Chat exposing (Chat, Chats)
 import Element exposing (..)
 import Element.Background as Background
@@ -14,6 +15,7 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Layout
 import Message exposing (Message)
+import Task
 import User exposing (User)
 import Util exposing (pass)
 import Viewer exposing (Viewer)
@@ -80,14 +82,14 @@ update msg model =
                 ( chats, maybePair ) =
                     Chat.pushMessage model.chats (Viewer.user model.viewer)
             in
-            ( { model | chats = chats }
-            , case maybePair of
+            case maybePair of
                 Nothing ->
-                    Cmd.none
+                    pass model
 
                 Just ( message, chat_id ) ->
-                    sendMessage (Viewer.cred model.viewer) message chat_id
-            )
+                    ( { model | chats = Chat.moveToTop chats chat_id }
+                    , sendMessage (Viewer.cred model.viewer) message chat_id
+                    )
 
         AddChat ->
             case model.dialogBox of
