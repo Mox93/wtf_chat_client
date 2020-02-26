@@ -449,11 +449,16 @@ viewChatCard chat open =
                 rgba 0 0 0 0
         ]
         [ viewAvatar open
-        , column
-            []
-            [ text <| Chat.title chat
-            , viewLastMessage chat
+        , el
+            [ width (px 260)
+            , height fill
+            , clip
             ]
+          <|
+            column [ centerY, spacing 4 ]
+                [ text <| Chat.title chat
+                , viewLastMessage chat
+                ]
         , viewStatus (Chat.hasNewMessages chat)
         ]
 
@@ -464,7 +469,11 @@ viewLastMessage chat =
         lastMsg =
             Chat.lastMessage chat
     in
-    el [ width (px 260), clip, Font.size 12 ] <| text lastMsg
+    el [ Font.size 12 ]
+        (String.split "\n" lastMsg
+            |> String.join "  "
+            |> text
+        )
 
 
 viewStatus : Bool -> Element msg
@@ -567,8 +576,16 @@ viewChatToolBar chat =
         , spacing 12
         ]
         [ viewAvatar True
-        , text <| Chat.title chat
+        , column [ centerY, spacing 4 ]
+            [ text <| Chat.title chat
+            , viewEmails chat
+            ]
         ]
+
+
+viewEmails : Chat -> Element msg
+viewEmails chat =
+    Chat.emails chat |> String.join " | " |> (\e -> el [ Font.size 12 ] <| text e)
 
 
 viewTextInput : String -> Element Msg
@@ -583,7 +600,8 @@ viewTextInput msg =
         , htmlAttribute (Attr.style "word-break" "break-word")
         ]
         [ Input.multiline
-            [ Border.rounded 24
+            [ height (maximum 128 shrink)
+            , Border.rounded 24
             , Border.width 0
             , focused []
             , htmlAttribute (Util.onEnterHandler SendMessage NoOp)

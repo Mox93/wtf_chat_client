@@ -163,7 +163,7 @@ lastMessage chat =
             Message.body msg
 
         Nothing ->
-            ""
+            "<No Messages>"
 
 
 

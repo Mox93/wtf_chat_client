@@ -218,14 +218,19 @@ view msg from =
 
 viewMsgBody : String -> Element msg
 viewMsgBody msg =
-    paragraph
+    column
         [ spacing 4
-        , Font.size 16
-        , htmlAttribute (Attr.style "word-break" "break-word")
         ]
         (String.split "\n" msg
-            |> List.map text
-            |> List.intersperse (html <| Html.br [] [])
+            |> List.map
+                (\m ->
+                    paragraph
+                        [ spacing 4
+                        , Font.size 16
+                        , htmlAttribute (Attr.style "word-break" "break-word")
+                        ]
+                        [ text m ]
+                )
         )
 
 
