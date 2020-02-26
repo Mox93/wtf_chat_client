@@ -57,6 +57,7 @@ type Msg
     | Exit
     | SendMessage
     | AddChat
+    | MarkAsScene
     | SelectChat Chat
     | ChangText String
     | ChangeEmail String
@@ -86,9 +87,12 @@ update msg model =
                 Nothing ->
                     pass model
 
-                Just ( message, chat_id ) ->
-                    ( { model | chats = Chat.moveToTop chats chat_id }
-                    , sendMessage (Viewer.cred model.viewer) message chat_id
+                Just ( message, chatId ) ->
+                    ( { model | chats = Chat.moveToTop chats chatId }
+                    , Cmd.batch
+                        [ sendMessage (Viewer.cred model.viewer) message chatId
+                        , jumpToBottom chatId
+                        ]
                     )
 
         AddChat ->
@@ -99,11 +103,20 @@ update msg model =
                 Just (NewContact email) ->
                     ( model, newChat (Viewer.cred model.viewer) email )
 
+        MarkAsScene ->
+            pass { model | chats = Chat.markAsScene model.chats }
+
         SelectChat chat ->
-            pass { model | chats = Chat.select model.chats chat }
+            let
+                ( newModel, cmd ) =
+                    update MarkAsScene { model | chats = Chat.select model.chats chat }
+            in
+            ( newModel
+            , Cmd.batch [ jumpToBottom <| Chat.id chat, cmd ]
+            )
 
         ChangText text ->
-            pass { model | chats = Chat.updateText model.chats text }
+            update MarkAsScene { model | chats = Chat.updateText model.chats text }
 
         ToggleDialogBox maybeDialogBox ->
             pass { model | dialogBox = maybeDialogBox }
@@ -117,13 +130,12 @@ update msg model =
                     pass { model | dialogBox = Just (NewContact email) }
 
         GotChats response ->
-            pass <|
-                case response of
-                    Ok chats ->
-                        { model | chats = Chat.fromList chats }
+            case response of
+                Ok chats ->
+                    pass { model | chats = Chat.fromList chats }
 
-                    Err _ ->
-                        model
+                Err _ ->
+                    pass model
 
         GotMessageResponse response ->
             case response of
@@ -141,13 +153,14 @@ update msg model =
         GotNewMessage response ->
             case response of
                 Ok ( chatId, message ) ->
-                    pass
-                        { model
-                            | chats =
-                                Chat.moveToTop
-                                    (Chat.addMessage { chats = model.chats, chatId = chatId, msg = message })
-                                    chatId
-                        }
+                    ( { model
+                        | chats =
+                            Chat.moveToTop
+                                (Chat.addMessage { chats = model.chats, chatId = chatId, msg = message })
+                                chatId
+                      }
+                    , jumpToBottom chatId
+                    )
 
                 Err _ ->
                     pass model
@@ -183,6 +196,13 @@ update msg model =
 
                 Err _ ->
                     pass model
+
+
+jumpToBottom : String -> Cmd Msg
+jumpToBottom id =
+    Dom.getViewportOf id
+        |> Task.andThen (\info -> Dom.setViewportOf id 0 info.scene.height)
+        |> Task.attempt (\_ -> NoOp)
 
 
 
@@ -432,13 +452,19 @@ viewChatCard chat open =
         , column
             []
             [ text <| Chat.title chat
-            , Chat.emails chat
-                |> String.join ", "
-                |> text
-                |> el [ Font.size 12 ]
+            , viewLastMessage chat
             ]
         , viewStatus (Chat.hasNewMessages chat)
         ]
+
+
+viewLastMessage : Chat -> Element msg
+viewLastMessage chat =
+    let
+        lastMsg =
+            Chat.lastMessage chat
+    in
+    el [ width (px 260), clip, Font.size 12 ] <| text lastMsg
 
 
 viewStatus : Bool -> Element msg
@@ -515,10 +541,17 @@ viewChatBody chats sender =
             column
                 [ width fill
                 , height fill
-                , Events.onMouseDown (SelectChat chat)
+                , Events.onMouseDown MarkAsScene
                 ]
                 [ viewChatToolBar chat
-                , el [ width fill, height fill, scrollbarY ] <| Chat.view (Chat.messages chat) sender
+                , el
+                    [ width fill
+                    , height fill
+                    , scrollbarY
+                    , htmlAttribute <| Attr.id <| Chat.id chat
+                    ]
+                  <|
+                    Chat.view (Chat.messages chat) sender
                 , viewTextInput <| Chat.pendingMsg chat
                 ]
 

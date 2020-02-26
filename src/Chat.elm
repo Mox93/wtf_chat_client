@@ -10,6 +10,8 @@ module Chat exposing
     , fromList
     , hasNewMessages
     , id
+    , lastMessage
+    , markAsScene
     , messages
     , moveToTop
     , name
@@ -150,6 +152,20 @@ hasNewMessages chat =
             True
 
 
+lastMessage : Chat -> String
+lastMessage chat =
+    let
+        maybeMsg =
+            List.head <| List.reverse <| messages chat
+    in
+    case maybeMsg of
+        Just msg ->
+            Message.body msg
+
+        Nothing ->
+            ""
+
+
 
 -- CONVENTION
 
@@ -182,18 +198,18 @@ select chats chat =
                     Idle chatList
 
                 Just ( val1, val2, val3 ) ->
-                    Active val1 (markAsScene val2) val3
+                    Active val1 val2 val3
 
         Active val1 val2 val3 ->
             case ( split val1 chat, split val3 chat ) of
                 ( Just ( valA, valB, valC ), Nothing ) ->
-                    Active valA (markAsScene valB) (valC ++ [ val2 ] ++ val3)
+                    Active valA valB (valC ++ [ val2 ] ++ val3)
 
                 ( Nothing, Just ( valA, valB, valC ) ) ->
-                    Active (val1 ++ [ val2 ] ++ valA) (markAsScene valB) valC
+                    Active (val1 ++ [ val2 ] ++ valA) valB valC
 
                 ( _, _ ) ->
-                    Active val1 (markAsScene val2) val3
+                    Active val1 val2 val3
 
 
 updateText : Chats -> String -> Chats
@@ -203,7 +219,7 @@ updateText chats text =
             chats
 
         Active val1 val2 val3 ->
-            Active val1 (markAsScene <| changeText val2 text) val3
+            Active val1 (changeText val2 text) val3
 
 
 pushMessage : Chats -> User -> ( Chats, Maybe ( Message, String ) )
@@ -349,6 +365,16 @@ remove chats chat =
                 Active (filter val1) val2 (filter val3)
 
 
+markAsScene : Chats -> Chats
+markAsScene chats =
+    case chats of
+        Idle _ ->
+            chats
+
+        Active val1 val2 val3 ->
+            Active val1 (toScene val2) val3
+
+
 
 --INTERNAL
 
@@ -418,14 +444,14 @@ fromChatId chats chatId =
         |> List.head
 
 
-markAsScene : Chat -> Chat
-markAsScene chat =
+toScene : Chat -> Chat
+toScene chat =
     case chat of
         GroupChat body ->
-            GroupChat { body | messages = List.map Message.confirmScene body.messages }
+            GroupChat { body | messages = List.map Message.markAsScene body.messages }
 
         PersonalChat body ->
-            PersonalChat { body | messages = List.map Message.confirmScene body.messages }
+            PersonalChat { body | messages = List.map Message.markAsScene body.messages }
 
 
 

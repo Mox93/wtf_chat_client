@@ -1,10 +1,10 @@
 module Message exposing
     ( Message
     , body
-    , confirmScene
     , decoder
     , encode
     , fromString
+    , markAsScene
     , replace
     , scene
     , sender
@@ -18,6 +18,7 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
+import Html
 import Html.Attributes as Attr
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
@@ -171,8 +172,8 @@ replace chat oldMsg newMsg =
     }
 
 
-confirmScene : Message -> Message
-confirmScene message =
+markAsScene : Message -> Message
+markAsScene message =
     case message of
         Incoming msg ->
             Incoming { msg | scene = True }
@@ -217,20 +218,14 @@ view msg from =
 
 viewMsgBody : String -> Element msg
 viewMsgBody msg =
-    column
+    paragraph
         [ spacing 4
         , Font.size 16
+        , htmlAttribute (Attr.style "word-break" "break-word")
         ]
         (String.split "\n" msg
-            |> List.map
-                (\m ->
-                    paragraph
-                        [ htmlAttribute (Attr.style "width" "100%")
-                        , htmlAttribute (Attr.style "word-break" "break-word")
-                        , spacing 4
-                        ]
-                        [ text m ]
-                )
+            |> List.map text
+            |> List.intersperse (html <| Html.br [] [])
         )
 
 
